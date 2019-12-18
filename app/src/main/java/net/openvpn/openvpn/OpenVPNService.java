@@ -1,14 +1,18 @@
 package net.openvpn.openvpn;
 
 
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.net.VpnService;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Handler;
 import android.os.Handler.Callback;
@@ -17,10 +21,13 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.security.KeyChain;
-import android.support.v4.app.NotificationCompat.Builder;
+import android.support.v4.app.NotificationCompat;
 import android.util.Base64;
 import android.util.Log;
 import android.widget.Toast;
+
+import net.openvpn.openvpn.ProxyList.Item;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -37,10 +44,8 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+
 import javax.crypto.Cipher;
-import net.openvpn.openvpn.ProxyList.Item;
-import android.app.*;
-import android.transition.*;
 
 public class OpenVPNService extends VpnService implements Callback, net.openvpn.openvpn.OpenVPNClientThread.EventReceiver {
     public static final String ACTION_BASE = "net.openvpn.openvpn.";
@@ -78,7 +83,7 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
     private final IBinder mBinder = new LocalBinder();
     private ConnectivityReceiver mConnectivityReceiver;
     private Handler mHandler;
-   Notification.Builder mNotifyBuilder;
+    Notification.Builder mNotifyBuilder;
     private OpenVPNClientThread mThread;
     private PrefUtil prefs;
     private ProfileList profile_list;
@@ -87,9 +92,9 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
     private boolean shutdown_pending = false;
     private long thread_started = 0;
 
-	private String str;
+    private String str;
 
-	private Object[] objArr;
+    private Object[] objArr;
 
     public interface EventReceiver {
         void event(EventMsg eventMsg);
@@ -124,11 +129,13 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
             return String.format("%s/%b/%b", objArr);
         }
     }
-	public enum Transition {
-		NO_CHANGE,
-		TO_CONNECTED,
-		TO_DISCONNECTED
-        }
+
+    public enum Transition {
+        NO_CHANGE,
+        TO_CONNECTED,
+        TO_DISCONNECTED
+    }
+
     public static class ConnectionStats {
         public long bytes_in;
         public long bytes_out;
@@ -164,8 +171,8 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
             boolean pvbs = OpenVPNService.this.prefs.get_boolean("pause_vpn_on_blanked_screen", false);
             String str;
             Object[] objArr;
-		
-			
+
+
             if ("android.intent.action.SCREEN_ON".equals(act)) {
                 str = OpenVPNService.TAG;
                 objArr = new Object[OpenVPNService.MSG_EVENT];
@@ -312,7 +319,7 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
             NO_CHANGE,
             TO_CONNECTED,
             TO_DISCONNECTED
-			}
+        }
 
         public static EventMsg disconnected() {
             EventMsg e = new EventMsg();
@@ -1186,7 +1193,7 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
         this.proxy_list.load();
     }
 
-    public int onStartCommand(Intent intent, int flags, int startId)  {
+    public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
             String prefix = INTENT_PREFIX;
             String action = intent.getAction();
@@ -1197,39 +1204,29 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
             if (action.equals(ACTION_CONNECT)) {
                 connect_action(prefix, intent, false);
             } else if (action.equals(ACTION_SUBMIT_PROXY_CREDS)) {
-                try
-				{
-					submit_proxy_creds_action(prefix, intent);
-				}
-				catch (IOException e)
-				{}
-            }
- else if (action.equals(ACTION_DISCONNECT))
- {
+                try {
+                    submit_proxy_creds_action(prefix, intent);
+                } catch (IOException e) {
+                }
+            } else if (action.equals(ACTION_DISCONNECT)) {
                 disconnect_action(prefix, intent);
             } else if (action.equals(ACTION_IMPORT_PROFILE)) {
                 import_profile_action(prefix, intent);
             } else if (action.equals(ACTION_IMPORT_PROFILE_VIA_PATH)) {
                 import_profile_via_path_action(prefix, intent);
             } else if (action.equals(ACTION_DELETE_PROFILE)) {
-                try
-				{
-					delete_profile_action(prefix, intent);
-				}
-				catch (IOException e)
-				{}
+                try {
+                    delete_profile_action(prefix, intent);
+                } catch (IOException e) {
+                }
+            } else if (action.equals(ACTION_RENAME_PROFILE)) {
+                try {
+                    rename_profile_action(prefix, intent);
+                } catch (IOException e) {
+                }
             }
- else if (action.equals(ACTION_RENAME_PROFILE))
- {
-	 try
-	 {
-		 rename_profile_action(prefix, intent);
-	 }
-	 catch (IOException e)
-	 {}
- }
         }
-        return MSG_EVENT;
+        return START_STICKY;
     }
 
     private boolean import_profile_via_path_action(String prefix, Intent intent) {
@@ -1385,22 +1382,18 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
         if (this.active) {
             stop_thread();
             new Handler().postDelayed(new Runnable() {
-					public void run() {
-						try
-						{
-							OpenVPNService.this.do_connect_action(prefix, intent, proxy_retry);
-						}
-						catch (IOException e)
-						{}
-					}
-				}, 2000);
+                public void run() {
+                    try {
+                        OpenVPNService.this.do_connect_action(prefix, intent, proxy_retry);
+                    } catch (IOException e) {
+                    }
+                }
+            }, 2000);
         } else {
-            try
-			{
-				do_connect_action(prefix, intent, proxy_retry);
-			}
-			catch (IOException e)
-			{}
+            try {
+                do_connect_action(prefix, intent, proxy_retry);
+            } catch (IOException e) {
+            }
         }
         return true;
     }
@@ -1587,9 +1580,38 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
     }
 
     private void start_notification() {
-        if (this.mNotifyBuilder == null && this.current_profile != null) {
-            this.mNotifyBuilder = new Notification.Builder(this).setContentIntent(get_configure_intent(MSG_EVENT)).setSmallIcon(R.drawable.icon).setContentTitle(this.current_profile.get_name()).setContentText(resString(R.string.notification_initial_content)).setOnlyAlertOnce(true).setOngoing(true).setWhen(new Date().getTime());
-            startForeground(NOTIFICATION_ID, this.mNotifyBuilder.getNotification());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            String NOTIFICATION_CHANNEL_ID = "com.openvpn.openvpn1";
+            String channelName = "OpenVPNService";
+            NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
+            chan.setLightColor(Color.BLUE);
+            chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            assert manager != null;
+            manager.createNotificationChannel(chan);
+
+            NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
+            Notification notification = notificationBuilder.setOngoing(true)
+                    .setSmallIcon(R.drawable.icon)
+                    .setContentTitle(this.current_profile.get_name())
+                    .setPriority(NotificationManager.IMPORTANCE_MIN)
+                    .setCategory(Notification.CATEGORY_SERVICE)
+                    .setContentText(resString(R.string.notification_initial_content))
+                    .setOnlyAlertOnce(true).setOngoing(true).setWhen(new Date().getTime())
+                    .build();
+            startForeground(NOTIFICATION_ID, notification);
+        }
+        else {
+            if (this.mNotifyBuilder == null && this.current_profile != null) {
+                this.mNotifyBuilder =
+                        new Notification.Builder(this)
+                                .setContentIntent(get_configure_intent(MSG_EVENT))
+                                .setSmallIcon(R.drawable.icon)
+                                .setContentTitle(this.current_profile.get_name())
+                                .setContentText(resString(R.string.notification_initial_content))
+                                .setOnlyAlertOnce(true).setOngoing(true).setWhen(new Date().getTime());
+                startForeground(NOTIFICATION_ID, this.mNotifyBuilder.getNotification());
+            }
         }
     }
 
@@ -1610,7 +1632,7 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
                     break;
             }
             this.mNotifyBuilder.setContentText(resString(evm.res_id));
-            startForeground(NOTIFICATION_ID, this.mNotifyBuilder.getNotification());
+//            startForeground(NOTIFICATION_ID, this.mNotifyBuilder.getNotification());
         }
     }
 
@@ -1940,7 +1962,7 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
                             ProxyContext proxy_context = this.current_profile.get_proxy_context(false);
                             if (proxy_context != null && proxy_context.should_launch_creds_dialog()) {
                                 proxy_context.invalidate_proxy_creds(this.proxy_list);
-                                Intent intent = new Intent(getBaseContext(), OpenVPNProxyCreds.class).addFlags(268435456);
+                                Intent intent = new Intent(getBaseContext(), OpenVPNProxyCreds.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                                 proxy_context.configure_creds_dialog_intent(intent);
                                 getApplication().startActivity(intent);
                                 break;
@@ -1955,13 +1977,13 @@ public class OpenVPNService extends VpnService implements Callback, net.openvpn.
                     if (evm.priority == MSG_LOG) {
                         Toast.makeText(this, evm.res_id, GCI_REQ_ESTABLISH).show();
                     } else if (evm.priority == EV_PRIO_HIGH) {
-                        Toast.makeText(this, evm.res_id, MSG_EVENT).show();
+                        Toast.makeText(this, evm.res_id, Toast.LENGTH_LONG).show();
                     }
                 }
                 if (evm.res_id == R.string.connected && (lastev == null || lastev.res_id != R.string.connected)) {
-                  //  evm.transition = Transition.TO_CONNECTED;
+                    //  evm.transition = Transition.TO_CONNECTED;
                 } else if (!(evm.res_id == R.string.connected || lastev == null || lastev.res_id != R.string.connected)) {
-             //       evm.transition = Transition.TO_DISCONNECTED;
+                    //       evm.transition = Transition.TO_DISCONNECTED;
                 }
                 if ((evm.flags & 4) != 0) {
                     this.last_event_prof_manage = evm;

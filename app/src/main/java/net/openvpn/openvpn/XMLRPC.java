@@ -133,7 +133,8 @@ public class XMLRPC {
             serializer.endTag(null, TAG_DATA).endTag(null, TYPE_ARRAY);
         } else if (object instanceof Map) {
             serializer.startTag(null, TYPE_STRUCT);
-            for (Entry<String, Object> entry : ((Map) object).entrySet()) {
+            for (Object entry1 : ((Map) object).entrySet()) {
+                Entry<String, Object> entry = (Entry<String, Object>) entry1;
                 String key = (String) entry.getKey();
                 Object value = entry.getValue();
                 serializer.startTag(null, TAG_MEMBER);
